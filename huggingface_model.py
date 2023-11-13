@@ -25,11 +25,15 @@ class HuggingfaceModel:
         [/INST] </s>
         """
 
-        self.chat_history = ""
+        self.chat_history = {}
 
-    def generate(self, prompt: str, generate_args: dict) -> str:
+    def generate(self, prompt: str, generate_args: dict, client_host: str) -> str:
 
-        basic_prompt = self.chat_history[-1000:]
+        if client_host in list(self.chat_history.keys()):
+            basic_prompt = self.chat_history[client_host][-1000:]
+        else:
+            self.chat_history[client_host] = ""
+            basic_prompt = ""
 
         input_prompt = self.prompt_template.format(rules=self.rule, prompt=basic_prompt+"user: "+prompt)
         ids = self.tokenizer.encode(f'{input_prompt}', return_tensors='pt', truncation=True).to("cuda")
@@ -40,12 +44,12 @@ class HuggingfaceModel:
         )
         
         decoded_output = self.tokenizer.decode(final_outputs[0], skip_special_tokens=True)[len(input_prompt):]
-        self.chat_history += "user: "+prompt+"\n" + "answer: "+decoded_output+"\n"
-        print(self.chat_history)
+        self.chat_history[client_host] += "user: "+prompt+"\n" + "answer: "+decoded_output+"\n"
+        print(self.chat_history[client_host])
         return decoded_output
 
-    def get_json(self, payload: HugginfaceInferenceRequest):
-        output = self.generate(payload.prompt, payload.get_generation_arguments_as_dict())
+    def get_json(self, payload: HugginfaceInferenceRequest, client_host: str):
+        output = self.generate(payload.prompt, payload.get_generation_arguments_as_dict(), client_host)
         response = {
             "model": payload.model_name,
             "answer": [
